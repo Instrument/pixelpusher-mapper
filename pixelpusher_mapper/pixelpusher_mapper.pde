@@ -14,6 +14,7 @@ Usage:
 
 */
 
+import java.util.concurrent.Semaphore;
 import com.heroicrobot.dropbit.registry.*;
 import com.heroicrobot.dropbit.devices.pixelpusher.Pixel;
 import com.heroicrobot.dropbit.devices.pixelpusher.Strip;
@@ -22,6 +23,8 @@ import java.util.*;
 
 import processing.core.*;
 import processing.video.*;
+
+Semaphore segmentLock = new Semaphore(1);
 
 Movie movie;
 PImage image;
@@ -55,13 +58,15 @@ class TestObserver implements Observer {
   public boolean hasStrips = false;
   public void update(Observable reg, Object updatedDevice) {
 
-    if(!this.hasStrips){
+    if(!this.hasStrips){ 
       PixelPusher pusher = (PixelPusher)updatedDevice;
       List<Strip> strips = pusher.getStrips();
 
       // add segments for any strips that have been discovered.
       for(int i = 0; i < strips.size(); i++){
+        segmentLock.acquireUninterruptibly();
         segments.add( new Segment(i * 20 + 20, 20, i * 20 + 20, 200, strips.get(i)) );
+        segmentLock.release();
       } 
 
       this.hasStrips = true;
@@ -73,6 +78,7 @@ void mousePressed() {
   PVector mouse = new PVector(mouseX, mouseY);
   selectedPoint = null;
   
+  segmentLock.acquireUninterruptibly();
   for(Segment seg : segments){
     if(seg.sampleStart.dist(mouse) < 12){
       selectedPoint = seg.sampleStart;
@@ -82,6 +88,7 @@ void mousePressed() {
       break;
     }
   }
+  segmentLock.release();
 }
 
 void mouseDragged(){
@@ -107,14 +114,15 @@ void draw() {
       
       registry.setExtraDelay(0);
       registry.startPushing();
-
+      segmentLock.acquireUninterruptibly();
       for(Segment seg : segments){
         seg.samplePixels();
       }
-
+ 
       for(Segment seg : segments){
         seg.draw();
-      }      
+      } 
+     segmentLock.release();     
    } 
 }
 
